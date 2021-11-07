@@ -33,15 +33,15 @@ R_Ik = kin.R_Ik;
 k_I_s = dyn.k_I_s;
 m = dyn.m;
 I_g_acc = dyn.I_g_acc;
-k_rk_s = dyn.k_rk_s;
+k_r_ks = dyn.k_r_ks;
 
 I_Jp_s = jac.I_Jp_s;
-I_Jr = jac.I_Jr_s;
+I_Jr = jac.I_Jr;
 
-eom.M = system(zeros(6,6));
-eom.b = system(zeros(6,1));
-eom.g = system(zeros(6,1));
-eom.hamiltonian = system(zeros(1,1));
+eom.M = sym(zeros(6,6));
+eom.b = sym(zeros(6,1));
+eom.g = sym(zeros(6,1));
+eom.hamiltonian = sym(zeros(1,1));
 
 
 %%
@@ -52,7 +52,7 @@ for k = 1:length(phi)
        + I_Jr{k}' * R_Ik{k} * k_I_s{k} * R_Ik{k}' * I_Jr{k};
 end
 
-fprintf('Simplifying for Performance')
+fprintf(', simplifying for Performance...')
 for k = 1:length(phi)
     for h = k:length(phi)
         m_kh = simplify(M(k,h));
@@ -68,33 +68,38 @@ fprintf('done\n')
 
 
 %gravity part
-fprintf('calculating gravity vector')
-g = system(6,1);
+fprintf('computing gravity vector')
+g = sym(zeros(6,1));
 for k = 1:length(phi)
     I_F_gk = m{k}*I_g_acc;
     g = g - I_Jp_s{k}' * I_F_gk;
 end
-fprintf('simplifying...')
+fprintf(', simplifying...')
 g = simplify(g);
 fprintf('done\n')
 
 
 
-fprintf('calculating b')
-b = system(6,1);
+fprintf('computing b ...')
+b = sym(zeros(6,1));
 for k = 1:length(phi)
-    b = b + I_Jp_s{k}' * m{k} * simplify(dAdt(I_Jp_s{k},phi,dphi)) *dphi...
-        + I_Jr{k}' * R_Ik{k} * k_I_s{k} * R_Ik{k}' * simplify(dAdt(I_Jr{k},phi,dphi)) * dphi...
-        + cross(I_Jr{k}' * I_Jr{k}*dphi, R_Ik{k} * k_I_s{k} * R_Ik{k}' * I_Jr{k}*dphi);
+    fprintf('b%i... ',k)
+    d_Jp_s = simplify(dAdt(I_Jp_s{k},phi,dphi));
+    d_Jr = simplify(dAdt(I_Jr{k},phi,dphi));
+    I_sk = simplify(R_Ik{k} * k_I_s{k} * R_Ik{k}');
+    omega_k = simplify(I_Jr{k} * dphi);
+    b = b + simplify(I_Jp_s{k}' * m{k} * d_Jp_s * dphi)...
+        + simplify(I_Jr{k}' * I_sk * d_Jr * dphi)...
+        + simplify(I_Jr{k}' * cross(omega_k, I_sk*omega_k));
 end
-fprintf('done\n')
+fprintf(' done\n')
 
 
 fprintf('computing total energy')
 kin_energy = 0.5*dphi'*M*dphi;
 pot_energy = sym(0);
 for i = 1:length(phi)
-   pot_energy  = pot_energy - [eye(3),zeros(3,1)] * T_Ik{k} * [k_rk_s{k},1] * m{k} * I_g_acc;
+   pot_energy  = pot_energy - [eye(3),zeros(3,1)] * T_Ik{k} * [k_r_ks{k},1] * m{k} * I_g_acc;
 end
 hamiltonian = kin_energy + pot_energy;
 fprintf('simplifying...')
